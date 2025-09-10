@@ -1,0 +1,5 @@
+fastapi[standard]
+pymongo
+python-dotenv
+python-multipart
+cloudinary
