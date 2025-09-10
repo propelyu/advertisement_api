@@ -7,12 +7,16 @@ from typing import Annotated
 import cloudinary
 import cloudinary.uploader
 from typing import Optional
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Connecting to Cloudinary for image uploads
 cloudinary.config(
-    cloud_name="drgmfka1p",
-    api_key="554476864623376",
-    api_secret="s8E4i_dIariDrhs9E9-DIy_zAko"
+    cloud_name=os.getenv("CLOUD_NAME"),
+    api_key=os.getenv("API_KEY"),
+    api_secret=os.getenv("API_SECRET"),
 )
 
 # Metadata for API documentation (tags)
