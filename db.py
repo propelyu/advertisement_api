@@ -12,4 +12,4 @@ ad_manager_db = mongo_client["advertisement_api"]
 
 # Pick a new collection to operate on
 adverts_collection = ad_manager_db["adverts"]
-
+users_collection = ad_manager_db["users"]
