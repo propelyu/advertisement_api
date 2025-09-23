@@ -1,4 +1,4 @@
-from fastapi import Form, File, UploadFile, HTTPException, status, APIRouter, Depends, Query
+from fastapi import Form, File, UploadFile, HTTPException, status, APIRouter, Depends
 from db import adverts_collection
 from bson.objectid import ObjectId
 from utils import replace_mongo_id
@@ -18,37 +18,33 @@ adverts_router = APIRouter()
 # GET All Adverts
 @adverts_router.get("/adverts", tags=["Adverts"])
 def get_all_adverts(
-    title: Optional[str] = Query("", description="Search by title"), 
-    description: Optional[str] = Query("", description="Search by description" ), 
-    location: Optional[str] = Query("", description="Search by location"),
-    category: Optional[str] = Query(None, description="Filter by category(optional)"),
-    price: Optional[float] = Query(None, description="Filter by price (optional)"),
-    limit: int = Query(10, ge=1, le=100), 
-    skip: int = Query(0, ge=0),
+    search: str | None = None,
+    category: str | None = None,
+    price: float | None = None,
+    limit: int = 10, 
+    skip: int = 0,
     ):
 
     # Building query
-    query = {
-        "$or": [
-            {"title": {"$regex": title, "$options": "i"}},
-            {"description": {"$regex": description, "$options": "i"}},
-        ]
-    }
+    query_filter = {}
 
-    # Optional location match (if provided)
-    if location: 
-        query["$or"].append({"location": {"$regex": location, "$options": "i"}})
+    if search:
+        query_filter["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"location": {"$regex": search, "$options": "i"}},
+        ]
     
     if category: 
-        query["category"] = category.lower().strip()
+        query_filter["category"] = {"$regex": f"^{category}$", "$options": "i"}
 
     if price is not None:
-        query["price"] = price
+        query_filter["price"] = price
 
 
     # Get all adverts from the database, using filters for title and description
     adverts = adverts_collection.find(
-        filter=query,
+        filter=query_filter,
         limit=limit,
         skip=skip
     ).to_list()
@@ -176,13 +172,18 @@ def update_advert(
         update_data["image_url"] = upload_result["secure_url"]
 
     # Replace the advert document in the database
-    adverts_collection.replace_one(
-        filter={"_id": ObjectId(advert_id)},
+    replace_result= adverts_collection.replace_one(
+        filter={"_id": ObjectId(advert_id), "owner": user_id},
         replacement=update_data,
     )
+
+    if not replace_result.modified_count:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No advert found")
     
+
     # Return a success message
     return {"message": "Advert updated successfully"}
+
 
 # DELETE Advert
 @adverts_router.delete("/adverts/{advert_id}", tags=["Adverts Update"])
@@ -212,4 +213,4 @@ def delete_advert(advert_id: str, user_id: Annotated[str, Depends(is_authenticat
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No advert found to delete")
         
     # Return a success message
-    return {"message": "Advert deleted successfully!"}
+    return {"message": "Advert deleted successfully!", "User_id": user_id}
