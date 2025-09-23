@@ -28,7 +28,7 @@ tags_metadata = [
     {
         "name": "Vendor Adverts",
         "description": "Managing adverts for vendors",
-    }
+    },
     {
         "name": "Adverts Update",
         "description": "Updating and deleting adverts"
