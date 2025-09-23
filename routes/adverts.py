@@ -118,6 +118,17 @@ def get_advert_by_id(advert_id: str):
     # Return the advert details after converting the MongoDB ID
     return {"data": replace_mongo_id(advert)}
 
+# Get all Adverts vendor owns
+@adverts_router.get("/adverts/vendor", tags=["Vendor Adverts"])
+def get_vendor_adverts(user_id: Annotated[dict, Depends(is_authenticated)]):
+    if user_id["role"] != "vendor":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only vendors can access their adverts")
+    
+    adverts = adverts_collection.find({"owner": user_id["id"]}).to_list()
+    
+    return {"data": list(map(replace_mongo_id, adverts))}
+
+
 ### Adverts Update Endpoints
 
 # PUT Advert
