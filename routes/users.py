@@ -33,7 +33,7 @@ def validate_password_strength(password: str) -> bool:
 #Define endpoints
 @users_router.post("/users/register", tags=["Users"])
 def register_user(
-    username: Annotated[str, Form()],
+    full_name: Annotated[str, Form()],
     email: Annotated[EmailStr, Form()],
     password: Annotated[str, Form(min_length=8)],
     confirm_password: Annotated[str, Form(min_length=8)],
@@ -73,7 +73,7 @@ def register_user(
     
     # Save user into database
     users_collection.insert_one({
-        "username": username,
+        "full_name": full_name,
         "email": email,
         "password": hashed_password.decode("utf-8"),
         "role": role.value,
