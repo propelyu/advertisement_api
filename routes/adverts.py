@@ -97,6 +97,19 @@ def post_advert(
     # Return a success message
     return {"message": "Advert added successfully"}
 
+
+# Get all Adverts vendor owns
+@adverts_router.get("/adverts/vendor", tags=["Vendor Adverts"])
+def get_vendor_adverts(user_id: Annotated[dict, Depends(is_authenticated)]):
+    if user_id["role"] != "vendor":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only vendors can access their adverts")
+    
+    adverts = adverts_collection.find({"owner": user_id["id"]}).to_list()
+    
+    return {"data": list(map(replace_mongo_id, adverts))}
+
+
+
 # GET Advert Details
 @adverts_router.get("/adverts/{advert_id}", tags=["Adverts"])
 def get_advert_by_id(advert_id: str):
@@ -113,16 +126,6 @@ def get_advert_by_id(advert_id: str):
         
     # Return the advert details after converting the MongoDB ID
     return {"data": replace_mongo_id(advert)}
-
-# Get all Adverts vendor owns
-@adverts_router.get("/adverts/vendor", tags=["Vendor Adverts"])
-def get_vendor_adverts(user_id: Annotated[dict, Depends(is_authenticated)]):
-    if user_id["role"] != "vendor":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only vendors can access their adverts")
-    
-    adverts = adverts_collection.find({"owner": user_id["id"]}).to_list()
-    
-    return {"data": list(map(replace_mongo_id, adverts))}
 
 ### Adverts Update Endpoints
 
@@ -184,7 +187,6 @@ def update_advert(
     # Return a success message
     return {"message": "Advert updated successfully"}
 
-
 # DELETE Advert
 @adverts_router.delete("/adverts/{advert_id}", tags=["Adverts Update"])
 def delete_advert(advert_id: str, user_id: Annotated[str, Depends(is_authenticated)]):
@@ -203,7 +205,7 @@ def delete_advert(advert_id: str, user_id: Annotated[str, Depends(is_authenticat
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Advert not found")
     
     if advert.get("owner") !=user_id["id"]:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can delete only your own advert")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can delete only your own advert!")
     
     # Delete the advert from the database
     delete_result = adverts_collection.delete_one(filter={"_id": ObjectId(advert_id)})
