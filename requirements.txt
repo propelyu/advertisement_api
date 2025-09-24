@@ -7,3 +7,4 @@ bcrypt
 pyjwt
 google-generativeai
 Pillow 
+google-genai
