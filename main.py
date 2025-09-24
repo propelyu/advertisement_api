@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from routes.adverts import adverts_router
 from routes.users import users_router
+from routes.ai import ai_router
 
 load_dotenv()
 
@@ -37,6 +38,10 @@ tags_metadata = [
         "name": "Users",
         "description": "Registering users and user authentication",
     },
+    {
+        "name": "AI Features",
+        "description": "Endpoints for AI-powered suggestions.",
+    }
 ]
 
 # Pydantic model 
@@ -62,3 +67,4 @@ def get_home():
 # Include routers
 app.include_router(adverts_router)
 app.include_router(users_router)
+app.include_router(ai_router)
