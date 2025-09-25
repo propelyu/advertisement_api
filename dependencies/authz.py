@@ -11,17 +11,20 @@ permissions = [
     {
          "role": "vendor",
         "permissions": [
-            "post_event", 
-            "get_events", 
-            "get_event", 
-            "put_event", 
-            "delete_event"]
+            "post_advert",
+            "get_all_adverts", 
+            "get_vendor_adverts",
+            "get_advert_by_id",
+            "get_similar_adverts",
+            "update_advert", 
+            "delete_advert"]
     },
     {
          "role": "guest",
         "permissions": [
-            "get_events", 
-            "get_event"]
+            "get_all_adverts", 
+            "get_advert_by_id",
+            "get_similar_adverts"]
     },
 ]
     
@@ -40,7 +43,7 @@ def has_roles(roles):
     return check_roles
 
 def has_permission(permission):
-    def checK_permission(user: Annotated[any, Depends(authenticated_user)]):
+    def check_permission(user: Annotated[any, Depends(authenticated_user)]):
         role = user.get("role")
         for entry in permissions:
             if entry["role"] == role:
@@ -49,5 +52,5 @@ def has_permission(permission):
                     return user
                 break
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-        return checK_permission
+        return check_permission
             
