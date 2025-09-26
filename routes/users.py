@@ -117,5 +117,6 @@ def login_user(
 
     return {
         "message": "User logged in successfully!",
-        "access_token": encoded_iwt
+        "access_token": encoded_iwt,
+        "role": user["role"]
     }
