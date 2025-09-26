@@ -2,10 +2,9 @@ from fastapi import Form, File, HTTPException, status, APIRouter, Depends
 from db import adverts_collection
 from bson.objectid import ObjectId
 from utils import replace_mongo_id, genai_client
-from typing import Annotated
+from typing import Annotated, Optional
 import cloudinary
 import cloudinary.uploader
-from typing import Optional
 from dependencies.authn import is_authenticated
 from dependencies.authz import has_roles
 from google.genai import types
@@ -163,11 +162,12 @@ def get_similar_adverts(advert_id, limit=10, skip=0):
 
 
 ### Adverts Update Endpoints
-
-
-# PUT Advert
-# This endpoint updates an existing advert by its ID
-@adverts_router.put("/adverts/{advert_id}", tags=["Adverts Update"])
+# ---------- UPDATE / REPLACE ADVERT ----------
+@adverts_router.put(
+    "/adverts/{advert_id}",
+    tags=["Adverts Update"],
+    dependencies=[Depends(has_roles(["vendor", "admin"]))],
+)
 def update_advert(
     advert_id: str,
     title: Annotated[str, Form()],
@@ -178,6 +178,28 @@ def update_advert(
     user_id: Annotated[dict, Depends(is_authenticated)],
     image: Annotated[Optional[bytes], File()] = None,
 ):
+    # ensure valid mongo id first
+    if not ObjectId.is_valid(advert_id):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid advert ID received!"
+        )
+
+    # only vendors can update
+    if user_id["role"] != "vendor":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only vendors can update adverts")
+
+    # confirm advert exists
+    existing_advert = adverts_collection.find_one({"_id": ObjectId(advert_id)})
+    if not existing_advert:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Advert not found")
+
+    # ensure ownership
+    if existing_advert.get("owner") != user_id["id"]:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="You can update only your own advert"
+        )
+
+    # generate or upload image
     if not image:
         response = genai_client.models.generate_images(
             model="imagen-4.0-generate-001",
@@ -186,27 +208,7 @@ def update_advert(
         )
         image = response.generated_images[0].image.image_bytes
 
-    if user_id["role"] != "vendor":
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid ID")
-
-    # Check for a valid MongoDB ObjectId
-    if not ObjectId.is_valid(advert_id):
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid advert ID received!"
-        )
-
-    # Check if the advert exists before updating
-    existing_advert = adverts_collection.find_one({"_id": ObjectId(advert_id)})
-    if not existing_advert:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Advert not found")
-
-    # Ensuring user owns the advert
-    if existing_advert.get("owner") != user_id["id"]:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "You can update only your own advert"
-        )
-
-    # Preparing the update data
+    upload_result = cloudinary.uploader.upload(image)
     update_data = {
         "title": title,
         "description": description,
@@ -214,58 +216,51 @@ def update_advert(
         "category": category,
         "location": location,
         "owner": user_id["id"],
+        "image_url": upload_result["secure_url"],
     }
 
-    # uploading a new image
-    if image:
-        upload_result = cloudinary.uploader.upload(image)
-        update_data["image_url"] = upload_result["secure_url"]
-
-    # Replace the advert document in the database
     replace_result = adverts_collection.replace_one(
-        filter={"_id": ObjectId(advert_id), "owner": user_id},
-        replacement=update_data,
+        {"_id": ObjectId(advert_id)}, update_data
     )
-
     if not replace_result.modified_count:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No advert found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No advert found to update")
 
-    # Return a success message
     return {"message": "Advert updated successfully"}
 
 
-# DELETE Advert
-@adverts_router.delete("/adverts/{advert_id}", tags=["Adverts Update"])
-def delete_advert(advert_id: str, user_id: Annotated[str, Depends(is_authenticated)]):
-
-    # ensuring only vendors can delete
-    if user_id["role"] != "vendor":
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Only vendors can delete adverts"
-        )
-
-    # Check for a valid MongoDB ObjectId
+# ---------- DELETE ADVERT ----------
+@adverts_router.delete(
+    "/adverts/{advert_id}",
+    tags=["Adverts Update"],
+    dependencies=[Depends(has_roles(["vendor", "admin"]))],
+)
+def delete_advert(
+    advert_id: str,
+    user_id: Annotated[dict, Depends(is_authenticated)],
+):
+    # validate id
     if not ObjectId.is_valid(advert_id):
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid advert ID received!"
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid advert ID received!"
         )
 
-    # Checking if the advert exists and belongs to the user
-    advert = adverts_collection.find_one(filter={"_id": ObjectId(advert_id)})
-    if not advert:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Advert not found")
+    # only vendors can delete
+    if user_id["role"] != "vendor":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only vendors can delete adverts")
 
+    # ensure advert belongs to user
+    advert = adverts_collection.find_one({"_id": ObjectId(advert_id)})
+    if not advert:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Advert not found")
     if advert.get("owner") != user_id["id"]:
         raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "You can delete only your own advert!"
+            status.HTTP_403_FORBIDDEN, detail="You can delete only your own advert"
         )
 
-    # Delete the advert from the database
-    delete_result = adverts_collection.delete_one(filter={"_id": ObjectId(advert_id)})
+    delete_result = adverts_collection.delete_one(
+        {"_id": ObjectId(advert_id)}
+    )
+    if not delete_result.deleted_count:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No advert found to delete")
 
-    # If no advert was deleted, raise a 404 error
-    if not delete_result.deleted_count == 0:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No advert found to delete")
-
-    # Return a success message
-    return {"message": "Advert deleted successfully!", "User_id": user_id}
+    return {"message": "Advert deleted successfully!", "user_id": user_id["id"]}
